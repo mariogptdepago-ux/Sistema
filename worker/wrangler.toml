@@ -1,0 +1,10 @@
+name = "html-access-control"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://CHANGE-ME.github.io"
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "REEMPLAZAR_KV_NAMESPACE_ID"
