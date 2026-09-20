@@ -1,0 +1,5 @@
+worker/node_modules/
+worker/.dev.vars
+__pycache__/
+*.pyc
+.DS_Store
