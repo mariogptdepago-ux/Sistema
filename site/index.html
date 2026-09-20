@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aplicaciones educativas</title>
+<style>
+:root{--bg:#f4f8fb;--card:#fff;--ink:#17202a;--muted:#607080;--primary:#0878c9;--accent:#58cc02;--border:#d9e7f2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+main{width:min(980px,92vw);margin:44px auto}h1{margin-bottom:6px}p{color:var(--muted);line-height:1.5}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;margin-top:24px}
+.card{background:#fff;border:2px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 12px 30px rgba(18,59,94,.08)}
+.card h2{font-size:1.08rem;margin:8px 0}.status{font-weight:900;font-size:.85rem}
+a.button{display:inline-block;margin-top:12px;background:var(--accent);color:white;text-decoration:none;padding:11px 14px;border-radius:12px;font-weight:900}
+a.button.disabled{pointer-events:none;background:#9aa9b5}.admin{color:var(--primary);font-weight:800;text-decoration:none}
+.small{font-size:.86rem}.error{color:#9a1e1e;font-weight:800}
+</style></head>
+<body><main>
+<div class="toolbar"><div><h1>Aplicaciones educativas</h1><p>Las aplicaciones nuevas aparecen automáticamente después del despliegue.</p></div>
+<a class="admin" href="./control-activacion.html">Control de activación</a></div>
+<div id="apps" class="grid"><div class="card">Consultando aplicaciones…</div></div>
+<p id="error" class="error"></p><p class="small">Una aplicación recién agregada se registra inicialmente como desactivada.</p>
+</main>
+<script src="./config.js"></script>
+<script>
+(async()=>{
+ const box=document.getElementById("apps"), err=document.getElementById("error");
+ const API=String(window.ACCESS_CONTROL_CONFIG?.API_BASE||"").replace(/\/+$/,"");
+ try{
+   const m=await fetch("./apps-manifest.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.json());
+   let states={};
+   if(API && !API.includes("CHANGE-ME")){
+     const r=await fetch(API+"/api/apps",{cache:"no-store"});
+     if(r.ok){const j=await r.json();states=Object.fromEntries((j.apps||[]).map(x=>[x.id,x]));}
+   }
+   box.innerHTML="";
+   for(const app of (m.apps||[])){
+     const s=states[app.id], enabled=s?!!s.available:false, known=!!s;
+     const d=document.createElement("div"); d.className="card";
+     const status=!known?"⚪ Sin sincronizar":enabled?"🟢 Activada":"🔴 Desactivada";
+     d.innerHTML=`<div class="status">${status}</div><h2></h2><p class="small"></p>
+       <a class="button ${enabled?"":"disabled"}" href="./${app.file}">${enabled?"Abrir aplicación":"Acceso no disponible"}</a>`;
+     d.querySelector("h2").textContent=app.title;
+     d.querySelector("p").textContent=app.sourceFile;
+     box.appendChild(d);
+   }
+ }catch(e){box.innerHTML="";err.textContent=e.message}
+})();
+</script></body></html>

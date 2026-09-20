@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "numerico-ap4-eje1-d1-grado11",
+      "title": "Razones relacionadas | Numérico AP4 · EJE1 · D1 · Grado 11",
+      "file": "apps/numerico-ap4-eje1-d1-grado11.html",
+      "sourceFile": "Numerico-AP4-EJE1-D1-Grado11.html"
+    },
+    {
+      "id": "refuerzoacumulativo-numerico-ap4-eje1-d1-grado11",
+      "title": "Refuerzo acumulativo · Numérico AP4 EJE1 D1",
+      "file": "apps/refuerzoacumulativo-numerico-ap4-eje1-d1-grado11.html",
+      "sourceFile": "RefuerzoAcumulativo-Numerico-AP4-EJE1-D1-Grado11.html"
+    }
+  ]
+}

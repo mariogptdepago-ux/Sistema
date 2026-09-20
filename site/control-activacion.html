@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control de activación</title>
+<style>
+:root{--bg:#f4f8fb;--card:#fff;--ink:#17202a;--muted:#607080;--primary:#0878c9;--accent:#58cc02;--danger:#d92d20;--border:#d9e7f2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+main{width:min(1150px,94vw);margin:32px auto}.card{background:#fff;border:2px solid var(--border);border-radius:20px;padding:20px;margin:16px 0;box-shadow:0 12px 30px rgba(18,59,94,.07)}
+h1,h2{margin-top:0}p{color:var(--muted);line-height:1.5}.hidden{display:none!important}
+input,button{font:inherit}input[type=text],input[type=password],input[type=datetime-local]{width:100%;padding:10px;border:2px solid var(--border);border-radius:10px}
+button{border:0;border-radius:10px;padding:10px 14px;font-weight:850;cursor:pointer;background:var(--primary);color:#fff}
+button.secondary{background:#e8f1f8;color:#31475a}button.danger{background:var(--danger)}button:disabled{opacity:.55;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted)}
+.switch{display:inline-flex;align-items:center;gap:8px;font-weight:850}.switch input{width:20px;height:20px}.msg{font-weight:800}.error{color:#9a1e1e}.ok{color:#267000}
+.app-permissions{display:flex;gap:8px;flex-wrap:wrap}.chip{border:1px solid var(--border);border-radius:999px;padding:6px 9px;background:#fbfdff}
+.small{font-size:.84rem}.tabs{display:flex;gap:8px}.tab.active{background:var(--accent)}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.tablewrap{overflow:auto}}
+</style></head>
+<body><main>
+<div class="row"><div class="grow"><h1>Control de activación</h1><p>Activa, desactiva y programa las aplicaciones. También administra usuarios y permisos.</p></div><a href="./index.html">Volver al sitio</a></div>
+<section id="loginCard" class="card"><h2>Acceso de administrador</h2>
+<form id="adminLogin"><div class="grid"><label>Contraseña de administrador<input id="adminPassword" type="password" required autocomplete="current-password"></label>
+<div style="align-self:end"><button type="submit">Ingresar</button></div></div></form><p id="loginMsg" class="msg"></p></section>
+
+<section id="panel" class="hidden">
+<div class="row"><div class="tabs"><button id="tabApps" class="tab active">Aplicaciones</button><button id="tabUsers" class="tab secondary">Usuarios</button></div>
+<div class="grow"></div><button id="refresh" class="secondary">Actualizar</button><button id="logout" class="danger">Salir</button></div>
+
+<div id="appsPane" class="card"><h2>Aplicaciones detectadas</h2>
+<p class="small">Una aplicación nueva llega como <strong>desactivada</strong>. El estado se guarda en Cloudflare KV; no se modifica ningún JavaScript.</p>
+<div class="tablewrap"><table><thead><tr><th>Aplicación</th><th>Estado</th><th>Inicio</th><th>Fin</th><th></th></tr></thead><tbody id="appsBody"></tbody></table></div>
+<p id="appsMsg" class="msg"></p></div>
+
+<div id="usersPane" class="card hidden"><div class="row"><div class="grow"><h2>Usuarios</h2><p class="small">Los usuarios acceden solo a las apps marcadas. Usa * para permitir todas.</p></div><button id="newUser">+ Crear usuario</button></div>
+<div class="tablewrap"><table><thead><tr><th>Usuario</th><th>Estado</th><th>Permisos</th><th></th></tr></thead><tbody id="usersBody"></tbody></table></div><p id="usersMsg" class="msg"></p></div>
+
+<div id="userEditor" class="card hidden"><h2 id="userEditorTitle">Crear usuario</h2><form id="userForm">
+<div class="grid"><label>Usuario<input id="userName" type="text" maxlength="80" required></label>
+<label>Nombre mostrado<input id="displayName" type="text" maxlength="120"></label>
+<label>Contraseña <span class="small">(en edición, vacía = conservar)</span><input id="userPassword" type="password" minlength="10"></label>
+<label class="switch"><input id="userEnabled" type="checkbox" checked> Usuario activo</label></div>
+<h3>Aplicaciones permitidas</h3><div id="permissionList" class="app-permissions"></div>
+<div class="row" style="margin-top:14px"><button type="submit">Guardar usuario</button><button type="button" id="cancelUser" class="secondary">Cancelar</button></div>
+</form><p id="userEditorMsg" class="msg"></p></div>
+</section></main>
+
+<script src="./config.js"></script>
+<script>
+const API=String(window.ACCESS_CONTROL_CONFIG?.API_BASE||"").replace(/\/+$/,"");
+const ADMIN_KEY="html_control_admin_token";let token=sessionStorage.getItem(ADMIN_KEY)||"",apps=[],users=[],editingUser=null;
+const $=id=>document.getElementById(id);
+function msg(el,text,ok=false){el.textContent=text||"";el.className="msg "+(text?(ok?"ok":"error"):"")}
+async function req(path,opt={}){
+ const headers=new Headers(opt.headers||{});headers.set("Content-Type","application/json");if(token)headers.set("Authorization","Bearer "+token);
+ const r=await fetch(API+path,{...opt,headers,cache:"no-store"});const data=await r.json().catch(()=>({}));
+ if(r.status===401){token="";sessionStorage.removeItem(ADMIN_KEY);showLogin()}if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data;
+}
+function localValue(iso){if(!iso)return"";const d=new Date(iso),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}
+function isoValue(v){return v?new Date(v).toISOString():null}
+function showLogin(){$("loginCard").classList.remove("hidden");$("panel").classList.add("hidden")}
+function showPanel(){$("loginCard").classList.add("hidden");$("panel").classList.remove("hidden")}
+$("adminLogin").onsubmit=async e=>{e.preventDefault();msg($("loginMsg"),"");try{
+ const data=await req("/api/admin/login",{method:"POST",body:JSON.stringify({password:$("adminPassword").value})});
+ token=data.token;sessionStorage.setItem(ADMIN_KEY,token);$("adminPassword").value="";showPanel();await loadAll();
+}catch(err){msg($("loginMsg"),err.message)}};
+$("logout").onclick=()=>{token="";sessionStorage.removeItem(ADMIN_KEY);showLogin()};
+$("refresh").onclick=()=>loadAll();
+$("tabApps").onclick=()=>{$("appsPane").classList.remove("hidden");$("usersPane").classList.add("hidden");$("userEditor").classList.add("hidden");$("tabApps").className="tab active";$("tabUsers").className="tab secondary"};
+$("tabUsers").onclick=()=>{$("appsPane").classList.add("hidden");$("usersPane").classList.remove("hidden");$("userEditor").classList.add("hidden");$("tabUsers").className="tab active";$("tabApps").className="tab secondary"};
+
+async function loadAll(){try{const [a,u]=await Promise.all([req("/api/admin/apps"),req("/api/admin/users")]);apps=a.apps||[];users=u.users||[];renderApps();renderUsers()}catch(err){msg($("appsMsg"),err.message)}}
+function renderApps(){
+ const body=$("appsBody");body.innerHTML="";
+ for(const a of apps){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td><strong></strong><div class="small"></div></td><td><label class="switch"><input type="checkbox" class="en"> <span></span></label></td>
+  <td><input type="datetime-local" class="start"></td><td><input type="datetime-local" class="end"></td><td><button class="save">Guardar</button></td>`;
+  tr.children[0].querySelector("strong").textContent=a.title||a.id;tr.children[0].querySelector(".small").textContent=a.id+(a.present===false?" · no está en el manifest":"");
+  const en=tr.querySelector(".en"),span=tr.querySelector(".switch span");en.checked=!!a.enabled;span.textContent=en.checked?"Activada":"Desactivada";en.onchange=()=>span.textContent=en.checked?"Activada":"Desactivada";
+  tr.querySelector(".start").value=localValue(a.startAt);tr.querySelector(".end").value=localValue(a.endAt);
+  tr.querySelector(".save").onclick=async()=>{try{
+   await req("/api/admin/apps/"+encodeURIComponent(a.id),{method:"PUT",body:JSON.stringify({enabled:en.checked,startAt:isoValue(tr.querySelector(".start").value),endAt:isoValue(tr.querySelector(".end").value)})});
+   msg($("appsMsg"),"Cambios guardados.",true);await loadAll();
+  }catch(err){msg($("appsMsg"),err.message)}};
+  body.appendChild(tr);
+ }
+}
+function renderUsers(){
+ const body=$("usersBody");body.innerHTML="";
+ for(const u of users){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td><strong></strong><div class="small"></div></td><td></td><td></td><td><button class="edit">Editar</button> <button class="del danger">Eliminar</button></td>`;
+  tr.children[0].querySelector("strong").textContent=u.displayName||u.username;tr.children[0].querySelector(".small").textContent=u.username;
+  tr.children[1].textContent=u.enabled!==false?"🟢 Activo":"🔴 Bloqueado";tr.children[2].textContent=(u.apps||[]).join(", ")||"Sin permisos";
+  tr.querySelector(".edit").onclick=()=>openUser(u);tr.querySelector(".del").onclick=async()=>{if(!confirm("¿Eliminar al usuario "+u.username+"?"))return;try{await req("/api/admin/users/"+encodeURIComponent(u.username),{method:"DELETE"});await loadAll();msg($("usersMsg"),"Usuario eliminado.",true)}catch(err){msg($("usersMsg"),err.message)}};
+  body.appendChild(tr);
+ }
+}
+function permissions(selected=[]){
+ const box=$("permissionList");box.innerHTML="";const all=document.createElement("label");all.className="chip";all.innerHTML='<input type="checkbox" value="*"> Todas (*)';box.appendChild(all);
+ for(const a of apps.filter(x=>x.present!==false)){const l=document.createElement("label");l.className="chip";const c=document.createElement("input");c.type="checkbox";c.value=a.id;c.checked=selected.includes(a.id);l.appendChild(c);l.append(" "+(a.title||a.id));box.appendChild(l)}
+ if(selected.includes("*"))all.querySelector("input").checked=true;
+}
+function openUser(u=null){editingUser=u?.username||null;$("usersPane").classList.add("hidden");$("userEditor").classList.remove("hidden");$("userEditorTitle").textContent=u?"Editar usuario":"Crear usuario";
+ $("userName").value=u?.username||"";$("userName").disabled=!!u;$("displayName").value=u?.displayName||"";$("userPassword").value="";$("userEnabled").checked=u?.enabled!==false;permissions(u?.apps||[]);msg($("userEditorMsg"),"")}
+$("newUser").onclick=()=>openUser(null);$("cancelUser").onclick=()=>{$("userEditor").classList.add("hidden");$("usersPane").classList.remove("hidden")};
+$("userForm").onsubmit=async e=>{e.preventDefault();msg($("userEditorMsg"),"");const chosen=[...$("permissionList").querySelectorAll("input:checked")].map(x=>x.value);
+ const body={username:$("userName").value.trim(),displayName:$("displayName").value.trim(),enabled:$("userEnabled").checked,apps:chosen};if($("userPassword").value)body.password=$("userPassword").value;
+ if(!editingUser&&!body.password){msg($("userEditorMsg"),"La contraseña es obligatoria para usuarios nuevos.");return}
+ try{const path=editingUser?"/api/admin/users/"+encodeURIComponent(editingUser):"/api/admin/users";await req(path,{method:editingUser?"PUT":"POST",body:JSON.stringify(body)});
+ $("userPassword").value="";await loadAll();$("userEditor").classList.add("hidden");$("usersPane").classList.remove("hidden");msg($("usersMsg"),"Usuario guardado.",true)}catch(err){msg($("userEditorMsg"),err.message)}};
+(async()=>{if(!API||API.includes("CHANGE-ME")){msg($("loginMsg"),"Primero configura PUBLIC_API_BASE y vuelve a ejecutar el build.");return}
+ if(token){try{await req("/api/admin/apps");showPanel();await loadAll();return}catch{}}showLogin()})();
+</script></body></html>
