@@ -1,0 +1,8 @@
+Para agregar una aplicación:
+1. Copia aquí un HTML autónomo.
+2. Haz commit y push a main.
+3. GitHub Actions lo detectará, protegerá y publicará.
+4. El Worker lo registrará como DESACTIVADO.
+5. Entra a control-activacion.html y actívalo con un clic.
+
+No edites site/apps/ manualmente: esa carpeta se regenera.
